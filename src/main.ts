@@ -6,6 +6,12 @@ interface ClockRatio {
 	readonly second: number;
 }
 
+interface ScaleDefinition {
+	readonly id: string;
+	readonly label: string;
+	readonly intervals: readonly number[];
+}
+
 interface SequencerStep {
 	readonly note: number;
 	readonly enabled: boolean;
@@ -74,6 +80,8 @@ const channelSelect = requireElement<HTMLSelectElement>("#midi-channel");
 const statusLight = requireElement<HTMLSpanElement>("#status-light");
 const statusText = requireElement<HTMLSpanElement>("#status-text");
 const lastMessage = requireElement<HTMLOutputElement>("#last-message");
+const rootNoteSelect = requireElement<HTMLSelectElement>("#root-note");
+const scaleSelect = requireElement<HTMLSelectElement>("#scale");
 const verticalFaders = requireElement<HTMLDivElement>("#vertical-faders");
 const faderTemplate = requireElement<HTMLTemplateElement>("#fader-template");
 const splitControl = requireElement<HTMLInputElement>("#split-control");
@@ -103,15 +111,28 @@ const availableClockRatios: readonly ClockRatio[] = [
 	{ label: "5:7", first: 5, second: 7 },
 	{ label: "7:11", first: 7, second: 11 },
 ];
+const availableScales: readonly ScaleDefinition[] = [
+	{ id: "major", label: "Major", intervals: [0, 2, 4, 5, 7, 9, 11] },
+	{ id: "minor-pentatonic", label: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10] },
+	{ id: "natural-minor", label: "Natural Minor", intervals: [0, 2, 3, 5, 7, 8, 10] },
+	{ id: "harmonic-minor", label: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11] },
+];
 const defaultClockRatio = availableClockRatios[0] ?? {
 	label: "1:1",
 	first: 1,
 	second: 1,
 };
+const defaultScale = availableScales[0] ?? {
+	id: "major",
+	label: "Major",
+	intervals: [0, 2, 4, 5, 7, 9, 11],
+};
 
 let sequence: readonly SequencerStep[] = createInitialSequence(initialPitchPattern);
 let splitPoint = 5;
 let clockRatio = defaultClockRatio;
+let rootPitchClass = 0;
+let scale = defaultScale;
 let midiAccess: MIDIAccess | null = null;
 let selectedOutput: MIDIOutput | null = null;
 let playbackOutput: MIDIOutput | null = null;
@@ -156,6 +177,52 @@ function midiNoteToName(note: number): string {
 	const name = noteNames[normalizedNote % noteNames.length] ?? "C";
 	const octave = Math.floor(normalizedNote / 12) - 1;
 	return `${name}${octave}`;
+}
+
+function positiveModulo(value: number, divisor: number): number {
+	return ((value % divisor) + divisor) % divisor;
+}
+
+function getScale(id: string): ScaleDefinition {
+	return availableScales.find((candidate) => candidate.id === id) ?? defaultScale;
+}
+
+function getPitchClassName(pitchClass: number): string {
+	return noteNames[positiveModulo(Math.round(pitchClass), noteNames.length)] ?? "C";
+}
+
+function quantizeMidiNote(
+	note: number,
+	root: number,
+	scaleDefinition: ScaleDefinition,
+): number {
+	const inputNote = clampMidiNote(note);
+	let nearestNote = inputNote;
+	let nearestDistance = Number.POSITIVE_INFINITY;
+
+	for (let candidate = minimumMidiNote; candidate <= maximumMidiNote; candidate += 1) {
+		const interval = positiveModulo(candidate - root, noteNames.length);
+		if (!scaleDefinition.intervals.includes(interval)) continue;
+
+		const distance = Math.abs(candidate - inputNote);
+		if (distance < nearestDistance || (distance === nearestDistance && candidate < nearestNote)) {
+			nearestNote = candidate;
+			nearestDistance = distance;
+		}
+	}
+
+	return nearestNote;
+}
+
+function quantizeSequence(
+	steps: readonly SequencerStep[],
+	root: number,
+	scaleDefinition: ScaleDefinition,
+): readonly SequencerStep[] {
+	return steps.map((step) => ({
+		...step,
+		note: quantizeMidiNote(step.note, root, scaleDefinition),
+	}));
 }
 
 function clampBpm(value: number): number {
@@ -336,8 +403,9 @@ function buildControls(): void {
 			renderStep(index);
 			const updatedStep = sequence[index];
 			if (updatedStep) {
+				const quantizedNote = quantizeMidiNote(updatedStep.note, rootPitchClass, scale);
 				describeMessage(
-					`Step ${index + 1} · ${midiNoteToName(updatedStep.note)} · MIDI ${updatedStep.note}`,
+					`Step ${index + 1} · ${midiNoteToName(quantizedNote)} · MIDI ${quantizedNote}`,
 				);
 			}
 		});
@@ -361,10 +429,12 @@ function renderStep(index: number): void {
 	const lanes = createLaneDefinitions(sequence.length, splitPoint);
 	const location = getStepLocation(index, lanes);
 	if (!location) return;
+	const quantizedNote = quantizeMidiNote(step.note, rootPitchClass, scale);
 
 	view.pitchSlider.value = String(step.note);
-	view.pitchOutput.value = midiNoteToName(step.note);
-	view.noteLabel.textContent = `MIDI ${step.note}`;
+	view.pitchSlider.setAttribute("aria-valuetext", midiNoteToName(quantizedNote));
+	view.pitchOutput.value = midiNoteToName(quantizedNote);
+	view.noteLabel.textContent = `MIDI ${quantizedNote}`;
 	view.name.textContent = `${location.laneId.toUpperCase()} · Step ${location.laneStepNumber}`;
 	view.toggle.checked = step.enabled;
 	view.toggleText.textContent = step.enabled ? "On" : "Off";
@@ -387,6 +457,11 @@ function renderClockSettings(): void {
 	clockRatioSelect.value = clockRatio.label;
 	const secondBpm = getSecondSequencerBpm(bpm, clockRatio);
 	clockRatioSummary.value = `B ${formatBpm(secondBpm)} BPM`;
+}
+
+function renderPitchSettings(): void {
+	rootNoteSelect.value = String(rootPitchClass);
+	scaleSelect.value = scale.id;
 }
 
 function showLanePlayhead(laneId: LaneId, stepIndex: number): void {
@@ -469,6 +544,7 @@ function schedulePlayback(): void {
 
 	const channel = getChannelIndex();
 	const lanes = createLaneDefinitions(sequence.length, splitPoint);
+	const quantizedSequence = quantizeSequence(sequence, rootPitchClass, scale);
 	const nextLaneCursors: LaneCursor[] = [];
 
 	lanes.forEach((lane, laneIndex) => {
@@ -481,7 +557,7 @@ function schedulePlayback(): void {
 			cursor,
 			lane,
 			getLaneStepDurationMs(lane.id, bpm, clockRatio),
-			sequence,
+			quantizedSequence,
 			schedulerLookaheadMs,
 			noteGateRatio,
 		);
@@ -524,7 +600,7 @@ function startPlayback(): void {
 	updateTransportButton(true);
 	schedulePlayback();
 	describeMessage(
-		`MIDI Start · A ${bpm} BPM · ${clockRatio.label} · ${describeSplit(splitPoint, sequence.length)}`,
+		`MIDI Start · ${getPitchClassName(rootPitchClass)} ${scale.label} · A ${bpm} BPM · ${clockRatio.label} · ${describeSplit(splitPoint, sequence.length)}`,
 	);
 }
 
@@ -595,6 +671,26 @@ function setSplitPoint(value: number): void {
 	splitPoint = clampSplitPoint(value, sequence.length);
 	renderSequenceLayout();
 	const message = `Sequence split · ${describeSplit(splitPoint, sequence.length)}`;
+	if (playbackSchedulerId === null) describeMessage(message);
+	else rebasePlaybackSchedule(message);
+}
+
+function setRootPitchClass(value: number): void {
+	if (!Number.isFinite(value)) return;
+
+	rootPitchClass = positiveModulo(Math.round(value), noteNames.length);
+	renderPitchSettings();
+	renderSequenceLayout();
+	const message = `Root · ${getPitchClassName(rootPitchClass)} · ${scale.label}`;
+	if (playbackSchedulerId === null) describeMessage(message);
+	else rebasePlaybackSchedule(message);
+}
+
+function setScale(id: string): void {
+	scale = getScale(id);
+	renderPitchSettings();
+	renderSequenceLayout();
+	const message = `Scale · ${getPitchClassName(rootPitchClass)} ${scale.label}`;
 	if (playbackSchedulerId === null) describeMessage(message);
 	else rebasePlaybackSchedule(message);
 }
@@ -678,6 +774,10 @@ outputSelect.addEventListener("change", () => void selectOutput(outputSelect.val
 channelSelect.addEventListener("change", () => {
 	rebasePlaybackSchedule(`MIDI channel · ${Number(channelSelect.value)}`);
 });
+rootNoteSelect.addEventListener("change", () => {
+	setRootPitchClass(Number(rootNoteSelect.value));
+});
+scaleSelect.addEventListener("change", () => setScale(scaleSelect.value));
 splitControl.addEventListener("input", () => setSplitPoint(Number(splitControl.value)));
 bpmSlider.addEventListener("input", () => setBpm(Number(bpmSlider.value)));
 clockRatioSelect.addEventListener("change", () => setClockRatio(clockRatioSelect.value));
@@ -689,6 +789,7 @@ transportButton.addEventListener("click", togglePlayback);
 window.addEventListener("beforeunload", () => stopPlayback(true));
 
 buildControls();
+renderPitchSettings();
 renderSequenceLayout();
 renderClockSettings();
 updateTransportButton(false);

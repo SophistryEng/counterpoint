@@ -2,7 +2,7 @@
 
 A browser-based ten-step MIDI pitch sequencer with ten vertical pitch sliders,
 ten step buttons, a two-sequencer split control, tempo control, and Web MIDI
-output.
+output. Root-note and scale controls quantize every sequenced pitch.
 
 ## Run it
 
@@ -31,6 +31,10 @@ counts as secure; double-clicking `index.html` is not supported.
 ## Sequencer behavior
 
 - Pitch sliders 1–10: MIDI notes 48–72 (C3–C5), a two-octave range
+- Root note: all 12 chromatic pitch classes
+- Scales: Major, Minor Pentatonic, Natural Minor, and Harmonic Minor
+- Quantization: displayed and transmitted notes snap to the nearest selected
+  scale tone while each slider retains its underlying chromatic position
 - Step buttons 1–10: independently enable or disable their step
 - Split control: assigns 0–10 steps to Sequencer A and the remainder to
   Sequencer B

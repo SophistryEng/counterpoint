@@ -59,6 +59,43 @@
 			</section>
 
 			<section class="fader-bank" aria-label="Ten-step MIDI pitch sequencer">
+				<section class="pitch-settings" aria-labelledby="pitch-settings-heading">
+					<div>
+						<p class="control-number">Pitch quantization</p>
+						<h2 id="pitch-settings-heading">Root and scale</h2>
+					</div>
+
+					<div class="scale-selects">
+						<label class="scale-field">
+							<span>Root note</span>
+							<select id="root-note">
+								<option value="0">C</option>
+								<option value="1">C♯ / D♭</option>
+								<option value="2">D</option>
+								<option value="3">D♯ / E♭</option>
+								<option value="4">E</option>
+								<option value="5">F</option>
+								<option value="6">F♯ / G♭</option>
+								<option value="7">G</option>
+								<option value="8">G♯ / A♭</option>
+								<option value="9">A</option>
+								<option value="10">A♯ / B♭</option>
+								<option value="11">B</option>
+							</select>
+						</label>
+
+						<label class="scale-field">
+							<span>Scale</span>
+							<select id="scale">
+								<option value="major">Major</option>
+								<option value="minor-pentatonic">Minor Pentatonic</option>
+								<option value="natural-minor">Natural Minor</option>
+								<option value="harmonic-minor">Harmonic Minor</option>
+							</select>
+						</label>
+					</div>
+				</section>
+
 				<div id="vertical-faders" class="vertical-faders"></div>
 
 				<div class="lower-controls">
@@ -144,8 +181,9 @@
 
 			<p class="mapping-note">
 				The split assigns steps to Sequencers A and B. BPM sets A’s step clock;
-				the A:B ratio derives B’s independent clock. Pitch spans C3–C5 (MIDI
-				48–72); disabled steps play as rests.
+				the A:B ratio derives B’s independent clock. Slider pitches span C3–C5
+				(MIDI 48–72) and quantize to the selected root and scale; disabled steps
+				play as rests.
 			</p>
 		</main>
 

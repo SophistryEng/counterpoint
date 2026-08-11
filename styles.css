@@ -171,6 +171,52 @@ h1 {
 	margin-top: 22px;
 }
 
+.pitch-settings {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 18px;
+	margin-bottom: 12px;
+	padding: 14px 18px 16px;
+	background: linear-gradient(180deg, #181b25, #12141c);
+	border: 1px solid #303444;
+	border-radius: 14px;
+}
+
+.pitch-settings h2 {
+	margin: 0;
+	font-size: 0.9rem;
+}
+
+.scale-selects {
+	display: flex;
+	gap: 10px;
+}
+
+.scale-field {
+	display: grid;
+	gap: 5px;
+	color: #8f96a8;
+	font-size: 0.68rem;
+	font-weight: 750;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.scale-field select {
+	min-width: 150px;
+	height: 36px;
+	padding: 0 32px 0 10px;
+	background: #090b10;
+	border: 1px solid #303545;
+	border-radius: 8px;
+	color: #a99eff;
+	cursor: pointer;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.76rem;
+	text-transform: none;
+}
+
 .vertical-faders {
 	display: grid;
 	grid-template-columns: repeat(10, minmax(70px, 1fr));
@@ -504,6 +550,21 @@ input[type="range"] {
 
 	.vertical-faders {
 		grid-template-columns: repeat(2, minmax(80px, 1fr));
+	}
+
+	.pitch-settings {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.scale-selects {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.scale-field select {
+		width: 100%;
+		min-width: 0;
 	}
 
 	.last-message {
