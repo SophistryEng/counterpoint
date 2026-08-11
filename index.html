@@ -80,7 +80,7 @@
 				<output id="last-message" class="last-message">Waiting for input</output>
 			</section>
 
-			<section class="fader-bank" aria-label="Ten-step MIDI pitch sequencer">
+			<section class="fader-bank" aria-label="MIDI pitch sequencer">
 				<section class="pitch-settings" aria-labelledby="pitch-settings-heading">
 					<div>
 						<p class="control-number">Pitch quantization</p>
@@ -120,6 +120,13 @@
 								<option value="harmonic-minor">Harmonic Minor</option>
 							</select>
 						</label>
+
+						<label class="scale-field step-count-field">
+							<span>Steps</span>
+							<select id="step-count" aria-label="Number of sequence steps">
+								<option value="10">10</option>
+							</select>
+						</label>
 					</div>
 				</section>
 
@@ -129,7 +136,7 @@
 					<section class="split-section" aria-labelledby="split-heading">
 						<div class="split-heading">
 							<div>
-								<p class="control-number">0–10 steps</p>
+								<p id="split-range" class="control-number">0–10 steps</p>
 								<h2 id="split-heading">Sequence split</h2>
 							</div>
 							<output id="split-value" for="split-control">A 5 · B 5</output>
@@ -207,10 +214,11 @@
 			</section>
 
 			<p class="mapping-note">
-				The split assigns steps to Sequencers A and B. BPM sets A’s step clock;
-				the A:B ratio derives B’s independent clock. Slider pitches span C2–C5
-				(MIDI 36–72) and quantize to the selected root and scale; disabled steps
-				play as rests, while skipped steps consume no time.
+				Choose 8–32 steps; the fader row scrolls when needed. The split assigns
+				steps to Sequencers A and B. BPM sets A’s step clock; the A:B ratio derives
+				B’s independent clock. Slider pitches span C2–C5 (MIDI 36–72) and quantize
+				to the selected root and scale; disabled steps play as rests, while skipped
+				steps consume no time.
 			</p>
 		</main>
 

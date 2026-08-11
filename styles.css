@@ -221,10 +221,20 @@ h1 {
 	min-width: 190px;
 }
 
+.step-count-field select {
+	min-width: 76px;
+}
+
 .vertical-faders {
+	--step-count: 10;
+
 	display: grid;
-	grid-template-columns: repeat(10, minmax(70px, 1fr));
+	grid-template-columns: repeat(var(--step-count), minmax(70px, 1fr));
 	gap: 8px;
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	overscroll-behavior-x: contain;
 }
 
 .fader {
@@ -232,7 +242,7 @@ h1 {
 	grid-template-columns: minmax(0, 1fr);
 	grid-template-rows: auto auto 1fr auto auto;
 	justify-items: center;
-	min-width: 0;
+	min-width: 70px;
 	height: 386px;
 	padding: 18px 8px 14px;
 	background: linear-gradient(180deg, #181b25, #12141c);
@@ -542,10 +552,6 @@ input[type="range"] {
 		min-width: 0;
 	}
 
-	.vertical-faders {
-		grid-template-columns: repeat(5, minmax(70px, 1fr));
-	}
-
 	.lower-controls {
 		grid-template-columns: 1fr;
 	}
@@ -571,10 +577,6 @@ input[type="range"] {
 		grid-column: 1 / -1;
 	}
 
-	.vertical-faders {
-		grid-template-columns: repeat(2, minmax(80px, 1fr));
-	}
-
 	.pitch-settings {
 		align-items: stretch;
 		flex-direction: column;
@@ -591,6 +593,10 @@ input[type="range"] {
 	}
 
 	#scale {
+		min-width: 0;
+	}
+
+	.step-count-field select {
 		min-width: 0;
 	}
 

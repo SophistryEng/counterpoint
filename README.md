@@ -1,8 +1,8 @@
 # Sequencer Web MIDI prototype
 
-A browser-based ten-step MIDI pitch sequencer with ten vertical pitch sliders,
-ten step buttons, a two-sequencer split control, tempo control, and Web MIDI
-output. Root-note and scale controls quantize every sequenced pitch.
+A browser-based 8–32-step MIDI pitch sequencer with vertical pitch sliders,
+step buttons, a two-sequencer split control, tempo control, and Web MIDI output.
+Root-note and scale controls quantize every sequenced pitch.
 
 ## Run it
 
@@ -30,19 +30,21 @@ counts as secure; double-clicking `index.html` is not supported.
 
 ## Sequencer behavior
 
-- Pitch sliders 1–10: MIDI notes 36–72 (C2–C5), a three-octave range
+- Step count: 8–32 steps, defaulting to 10; the fader row scrolls horizontally
+  when its controls are wider than the available space
+- Pitch sliders: MIDI notes 36–72 (C2–C5), a three-octave range
 - Root note: all 12 chromatic pitch classes
 - Scales: all seven diatonic modes—Ionian, Dorian, Phrygian, Lydian,
   Mixolydian, Aeolian, and Locrian—plus Minor Pentatonic and Harmonic Minor
 - Quantization: displayed and transmitted notes snap to the nearest selected
   scale tone while each slider retains its underlying chromatic position
-- Step buttons 1–10: cycle through On, Off, and Skip
+- Step buttons: cycle through On, Off, and Skip
   - On plays the step normally
   - Off creates a timed rest
   - Skip removes the step from timing and immediately advances to the next
     non-skipped step
-- Split control: assigns 0–10 steps to Sequencer A and the remainder to
-  Sequencer B
+- Split control: assigns 0–N steps to Sequencer A and the remainder to
+  Sequencer B, where N is the selected step count
 - Playback: Sequencers A and B run concurrently and loop independently
 - Clock ratio: `1:1`, `1:2`, `1:4`, `2:3`, `5:7`, or `7:11`
 - Timing: the BPM control sets Sequencer A's step clock; Sequencer B's BPM is
@@ -53,10 +55,11 @@ counts as secure; double-clicking `index.html` is not supported.
 - Transport: MIDI Start, Stop, and 24 MIDI Clock pulses per quarter note at
   Sequencer A's BPM
 
-For example, a split of `6` gives Sequencer A six steps and Sequencer B four
-steps. With A set to 120 BPM and a `2:3` ratio, A advances at 120 BPM while B
-advances at 180 BPM. Each loops as soon as it reaches the end of its own steps.
-At `0` or `10`, one sequencer is empty and the other plays all ten steps.
+For example, with 10 steps selected, a split of `6` gives Sequencer A six steps
+and Sequencer B four steps. With A set to 120 BPM and a `2:3` ratio, A advances
+at 120 BPM while B advances at 180 BPM. Each loops as soon as it reaches the end
+of its own steps. At either end of the split range, one sequencer is empty and
+the other plays all selected steps.
 
 MIDI Clock is a global, channel-independent message, so the external MIDI Clock
 output represents Sequencer A's BPM. Sequencer B's derived clock is used by the

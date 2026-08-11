@@ -91,10 +91,12 @@ const statusText = requireElement<HTMLSpanElement>("#status-text");
 const lastMessage = requireElement<HTMLOutputElement>("#last-message");
 const rootNoteSelect = requireElement<HTMLSelectElement>("#root-note");
 const scaleSelect = requireElement<HTMLSelectElement>("#scale");
+const stepCountSelect = requireElement<HTMLSelectElement>("#step-count");
 const verticalFaders = requireElement<HTMLDivElement>("#vertical-faders");
 const faderTemplate = requireElement<HTMLTemplateElement>("#fader-template");
 const splitControl = requireElement<HTMLInputElement>("#split-control");
 const splitValue = requireElement<HTMLOutputElement>("#split-value");
+const splitRange = requireElement<HTMLElement>("#split-range");
 const bpmNumber = requireElement<HTMLInputElement>("#bpm-number");
 const bpmSlider = requireElement<HTMLInputElement>("#bpm-slider");
 const clockRatioSelect = requireElement<HTMLSelectElement>("#clock-ratio");
@@ -105,6 +107,8 @@ const minimumMidiNote = 36;
 const maximumMidiNote = 72;
 const initialPitchPattern = [60, 62, 64, 65, 67, 69, 71, 72, 67, 64] as const;
 const noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"] as const;
+const minimumStepCount = 8;
+const maximumStepCount = 32;
 const minimumBpm = 30;
 const maximumBpm = 300;
 const midiClocksPerQuarterNote = 24;
@@ -164,6 +168,27 @@ function clampMidiNote(note: number): number {
 
 function createInitialSequence(pitches: readonly number[]): readonly SequencerStep[] {
 	return pitches.map((note) => ({ note: clampMidiNote(note), state: "on" }));
+}
+
+function clampStepCount(value: number): number {
+	return Math.min(maximumStepCount, Math.max(minimumStepCount, Math.round(value)));
+}
+
+function createDefaultStep(index: number, pitches: readonly number[]): SequencerStep {
+	const note = pitches[index % pitches.length] ?? 60;
+	return { note: clampMidiNote(note), state: "on" };
+}
+
+function resizeSequence(
+	steps: readonly SequencerStep[],
+	requestedStepCount: number,
+	pitches: readonly number[],
+): readonly SequencerStep[] {
+	const stepCount = clampStepCount(requestedStepCount);
+	return Array.from(
+		{ length: stepCount },
+		(_unused, index) => steps[index] ?? createDefaultStep(index, pitches),
+	);
 }
 
 function updateStepPitch(
@@ -419,6 +444,11 @@ function createLaneSchedule(
 }
 
 function buildControls(): void {
+	clearPlayhead();
+	verticalFaders.replaceChildren();
+	verticalFaders.style.setProperty("--step-count", String(sequence.length));
+	stepViews.length = 0;
+
 	sequence.forEach((step, index) => {
 		const fragment = faderTemplate.content.cloneNode(true) as DocumentFragment;
 		const strip = requireChild<HTMLElement>(fragment, ".fader");
@@ -504,8 +534,11 @@ function renderStep(index: number): void {
 
 function renderSequenceLayout(): void {
 	sequence.forEach((_step, index) => renderStep(index));
+	stepCountSelect.value = String(sequence.length);
+	splitControl.max = String(sequence.length);
 	splitControl.value = String(splitPoint);
 	splitValue.value = describeSplit(splitPoint, sequence.length);
+	splitRange.textContent = `0–${sequence.length} steps`;
 	splitControl.setAttribute(
 		"aria-valuetext",
 		`Sequencer A has ${splitPoint} steps; Sequencer B has ${sequence.length - splitPoint} steps`,
@@ -735,6 +768,21 @@ function setSplitPoint(value: number): void {
 	else rebasePlaybackSchedule(message);
 }
 
+function setStepCount(value: number): void {
+	if (!Number.isFinite(value)) return;
+
+	const nextStepCount = clampStepCount(value);
+	if (nextStepCount === sequence.length) return;
+
+	sequence = resizeSequence(sequence, nextStepCount, initialPitchPattern);
+	splitPoint = clampSplitPoint(splitPoint, sequence.length);
+	buildControls();
+	renderSequenceLayout();
+	const message = `Step count · ${sequence.length} · ${describeSplit(splitPoint, sequence.length)}`;
+	if (playbackSchedulerId === null) describeMessage(message);
+	else rebasePlaybackSchedule(message);
+}
+
 function setRootPitchClass(value: number): void {
 	if (!Number.isFinite(value)) return;
 
@@ -849,6 +897,9 @@ rootNoteSelect.addEventListener("change", () => {
 	setRootPitchClass(Number(rootNoteSelect.value));
 });
 scaleSelect.addEventListener("change", () => setScale(scaleSelect.value));
+stepCountSelect.addEventListener("change", () => {
+	setStepCount(Number(stepCountSelect.value));
+});
 splitControl.addEventListener("input", () => setSplitPoint(Number(splitControl.value)));
 bpmSlider.addEventListener("input", () => setBpm(Number(bpmSlider.value)));
 clockRatioSelect.addEventListener("change", () => setClockRatio(clockRatioSelect.value));
@@ -859,6 +910,10 @@ bpmNumber.addEventListener("keydown", (event) => {
 transportButton.addEventListener("click", togglePlayback);
 window.addEventListener("beforeunload", () => stopPlayback(true));
 
+stepCountSelect.replaceChildren();
+for (let stepCount = minimumStepCount; stepCount <= maximumStepCount; stepCount += 1) {
+	stepCountSelect.add(new Option(String(stepCount), String(stepCount)));
+}
 buildControls();
 renderPitchSettings();
 renderSequenceLayout();
