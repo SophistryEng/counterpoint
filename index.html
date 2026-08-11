@@ -21,7 +21,7 @@
 						Enable MIDI
 					</button>
 
-					<label class="field">
+					<label class="field output-field">
 						<span>Output</span>
 						<select id="midi-output" disabled>
 							<option value="">No MIDI output selected</option>
@@ -29,9 +29,31 @@
 					</label>
 
 					<label class="field channel-field">
-						<span>Channel</span>
-						<select id="midi-channel">
+						<span>Synth A channel</span>
+						<select id="midi-channel-a">
 							<option value="1">1</option>
+							<option value="2">2</option>
+							<option value="3">3</option>
+							<option value="4">4</option>
+							<option value="5">5</option>
+							<option value="6">6</option>
+							<option value="7">7</option>
+							<option value="8">8</option>
+							<option value="9">9</option>
+							<option value="10">10</option>
+							<option value="11">11</option>
+							<option value="12">12</option>
+							<option value="13">13</option>
+							<option value="14">14</option>
+							<option value="15">15</option>
+							<option value="16">16</option>
+						</select>
+					</label>
+
+					<label class="field channel-field">
+						<span>Synth B channel</span>
+						<select id="midi-channel-b">
+							<option value="1" selected>1</option>
 							<option value="2">2</option>
 							<option value="3">3</option>
 							<option value="4">4</option>
@@ -87,9 +109,14 @@
 						<label class="scale-field">
 							<span>Scale</span>
 							<select id="scale">
-								<option value="major">Major</option>
+								<option value="major">Major (Ionian)</option>
+								<option value="dorian">Dorian</option>
+								<option value="phrygian">Phrygian</option>
+								<option value="lydian">Lydian</option>
+								<option value="mixolydian">Mixolydian</option>
+								<option value="natural-minor">Natural Minor (Aeolian)</option>
+								<option value="locrian">Locrian</option>
 								<option value="minor-pentatonic">Minor Pentatonic</option>
-								<option value="natural-minor">Natural Minor</option>
 								<option value="harmonic-minor">Harmonic Minor</option>
 							</select>
 						</label>
@@ -181,9 +208,9 @@
 
 			<p class="mapping-note">
 				The split assigns steps to Sequencers A and B. BPM sets A’s step clock;
-				the A:B ratio derives B’s independent clock. Slider pitches span C3–C5
-				(MIDI 48–72) and quantize to the selected root and scale; disabled steps
-				play as rests.
+				the A:B ratio derives B’s independent clock. Slider pitches span C2–C5
+				(MIDI 36–72) and quantize to the selected root and scale; disabled steps
+				play as rests, while skipped steps consume no time.
 			</p>
 		</main>
 
@@ -194,16 +221,15 @@
 				<input
 					class="vertical-fader"
 					type="range"
-					min="48"
+					min="36"
 					max="72"
 					step="1"
 					value="60"
 				/>
 				<output>C4</output>
-				<label class="step-toggle">
-					<input type="checkbox" />
+				<button class="step-toggle is-on" type="button">
 					<span>On</span>
-				</label>
+				</button>
 			</div>
 		</template>
 	</body>

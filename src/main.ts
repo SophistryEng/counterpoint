@@ -1,4 +1,5 @@
 type LaneId = "a" | "b";
+type StepState = "on" | "off" | "skip";
 
 interface ClockRatio {
 	readonly label: string;
@@ -14,7 +15,7 @@ interface ScaleDefinition {
 
 interface SequencerStep {
 	readonly note: number;
-	readonly enabled: boolean;
+	readonly state: StepState;
 }
 
 interface LaneDefinition {
@@ -52,13 +53,20 @@ interface StepSchedule {
 	readonly nextIndex: number;
 }
 
+interface LaneStepSelection {
+	readonly step: SequencerStep;
+	readonly globalIndex: number;
+	readonly localIndex: number;
+	readonly nextIndex: number;
+}
+
 interface StepView {
 	readonly strip: HTMLElement;
 	readonly pitchSlider: HTMLInputElement;
 	readonly pitchOutput: HTMLOutputElement;
 	readonly noteLabel: HTMLElement;
 	readonly name: HTMLElement;
-	readonly toggle: HTMLInputElement;
+	readonly toggle: HTMLButtonElement;
 	readonly toggleText: HTMLSpanElement;
 }
 
@@ -76,7 +84,8 @@ function requireChild<T extends Element>(parent: ParentNode, selector: string): 
 
 const connectButton = requireElement<HTMLButtonElement>("#connect-midi");
 const outputSelect = requireElement<HTMLSelectElement>("#midi-output");
-const channelSelect = requireElement<HTMLSelectElement>("#midi-channel");
+const channelASelect = requireElement<HTMLSelectElement>("#midi-channel-a");
+const channelBSelect = requireElement<HTMLSelectElement>("#midi-channel-b");
 const statusLight = requireElement<HTMLSpanElement>("#status-light");
 const statusText = requireElement<HTMLSpanElement>("#status-text");
 const lastMessage = requireElement<HTMLOutputElement>("#last-message");
@@ -92,7 +101,7 @@ const clockRatioSelect = requireElement<HTMLSelectElement>("#clock-ratio");
 const clockRatioSummary = requireElement<HTMLOutputElement>("#clock-ratio-summary");
 const transportButton = requireElement<HTMLButtonElement>("#transport-toggle");
 
-const minimumMidiNote = 48;
+const minimumMidiNote = 36;
 const maximumMidiNote = 72;
 const initialPitchPattern = [60, 62, 64, 65, 67, 69, 71, 72, 67, 64] as const;
 const noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"] as const;
@@ -112,9 +121,14 @@ const availableClockRatios: readonly ClockRatio[] = [
 	{ label: "7:11", first: 7, second: 11 },
 ];
 const availableScales: readonly ScaleDefinition[] = [
-	{ id: "major", label: "Major", intervals: [0, 2, 4, 5, 7, 9, 11] },
+	{ id: "major", label: "Major (Ionian)", intervals: [0, 2, 4, 5, 7, 9, 11] },
+	{ id: "dorian", label: "Dorian", intervals: [0, 2, 3, 5, 7, 9, 10] },
+	{ id: "phrygian", label: "Phrygian", intervals: [0, 1, 3, 5, 7, 8, 10] },
+	{ id: "lydian", label: "Lydian", intervals: [0, 2, 4, 6, 7, 9, 11] },
+	{ id: "mixolydian", label: "Mixolydian", intervals: [0, 2, 4, 5, 7, 9, 10] },
+	{ id: "natural-minor", label: "Natural Minor (Aeolian)", intervals: [0, 2, 3, 5, 7, 8, 10] },
+	{ id: "locrian", label: "Locrian", intervals: [0, 1, 3, 5, 6, 8, 10] },
 	{ id: "minor-pentatonic", label: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10] },
-	{ id: "natural-minor", label: "Natural Minor", intervals: [0, 2, 3, 5, 7, 8, 10] },
 	{ id: "harmonic-minor", label: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11] },
 ];
 const defaultClockRatio = availableClockRatios[0] ?? {
@@ -124,7 +138,7 @@ const defaultClockRatio = availableClockRatios[0] ?? {
 };
 const defaultScale = availableScales[0] ?? {
 	id: "major",
-	label: "Major",
+	label: "Major (Ionian)",
 	intervals: [0, 2, 4, 5, 7, 9, 11],
 };
 
@@ -149,7 +163,7 @@ function clampMidiNote(note: number): number {
 }
 
 function createInitialSequence(pitches: readonly number[]): readonly SequencerStep[] {
-	return pitches.map((note) => ({ note: clampMidiNote(note), enabled: true }));
+	return pitches.map((note) => ({ note: clampMidiNote(note), state: "on" }));
 }
 
 function updateStepPitch(
@@ -162,14 +176,26 @@ function updateStepPitch(
 	);
 }
 
-function updateStepEnabled(
+function updateStepState(
 	steps: readonly SequencerStep[],
 	stepIndex: number,
-	enabled: boolean,
+	state: StepState,
 ): readonly SequencerStep[] {
 	return steps.map((step, index) =>
-		index === stepIndex ? { ...step, enabled } : step,
+		index === stepIndex ? { ...step, state } : step,
 	);
+}
+
+function getNextStepState(state: StepState): StepState {
+	if (state === "on") return "off";
+	if (state === "off") return "skip";
+	return "on";
+}
+
+function getStepStateLabel(state: StepState): string {
+	if (state === "on") return "On";
+	if (state === "off") return "Off";
+	return "Skip";
 }
 
 function midiNoteToName(note: number): string {
@@ -328,6 +354,29 @@ function createClockSchedule(
 	return { timestamps, nextTimestamp: timestamp };
 }
 
+function findNextNonSkippedStep(
+	steps: readonly SequencerStep[],
+	lane: LaneDefinition,
+	startingIndex: number,
+): LaneStepSelection | null {
+	if (lane.stepCount === 0) return null;
+
+	let localIndex = startingIndex % lane.stepCount;
+	for (let checkedSteps = 0; checkedSteps < lane.stepCount; checkedSteps += 1) {
+		const globalIndex = lane.startIndex + localIndex;
+		const step = steps[globalIndex];
+		const nextIndex = advanceStepIndex(localIndex, lane.stepCount);
+		if (!step) return null;
+
+		if (step.state !== "skip") {
+			return { step, globalIndex, localIndex, nextIndex };
+		}
+		localIndex = nextIndex;
+	}
+
+	return null;
+}
+
 function createLaneSchedule(
 	now: number,
 	cursor: LaneCursor,
@@ -351,20 +400,19 @@ function createLaneSchedule(
 	let localIndex = cursor.nextIndex % lane.stepCount;
 
 	while (timestamp < scheduleUntil) {
-		const globalIndex = lane.startIndex + localIndex;
-		const step = steps[globalIndex];
-		if (!step) break;
+		const selection = findNextNonSkippedStep(steps, lane, localIndex);
+		if (!selection) break;
 
 		events.push({
-			...step,
-			index: globalIndex,
+			...selection.step,
+			index: selection.globalIndex,
 			laneId: lane.id,
-			laneStepNumber: localIndex + 1,
+			laneStepNumber: selection.localIndex + 1,
 			startTimestamp: timestamp,
 			endTimestamp: timestamp + stepDurationMs * gateRatio,
 		});
 		timestamp += stepDurationMs;
-		localIndex = advanceStepIndex(localIndex, lane.stepCount);
+		localIndex = selection.nextIndex;
 	}
 
 	return { events, nextTimestamp: timestamp, nextIndex: localIndex };
@@ -378,14 +426,13 @@ function buildControls(): void {
 		const pitchOutput = requireChild<HTMLOutputElement>(fragment, "output");
 		const noteLabel = requireChild<HTMLElement>(fragment, ".control-number");
 		const name = requireChild<HTMLElement>(fragment, ".fader-name");
-		const toggle = requireChild<HTMLInputElement>(fragment, ".step-toggle input");
+		const toggle = requireChild<HTMLButtonElement>(fragment, ".step-toggle");
 		const toggleText = requireChild<HTMLSpanElement>(fragment, ".step-toggle span");
 
 		pitchSlider.id = `step-pitch-${index + 1}`;
 		pitchSlider.value = String(step.note);
 		pitchSlider.setAttribute("aria-label", `Step ${index + 1} pitch`);
 		pitchOutput.htmlFor = pitchSlider.id;
-		toggle.setAttribute("aria-label", `Enable step ${index + 1}`);
 
 		const view = {
 			strip,
@@ -410,10 +457,16 @@ function buildControls(): void {
 			}
 		});
 
-		toggle.addEventListener("change", () => {
-			sequence = updateStepEnabled(sequence, index, toggle.checked);
+		toggle.addEventListener("click", () => {
+			const currentStep = sequence[index];
+			if (!currentStep) return;
+
+			const nextState = getNextStepState(currentStep.state);
+			sequence = updateStepState(sequence, index, nextState);
 			renderStep(index);
-			describeMessage(`Step ${index + 1} · ${toggle.checked ? "On" : "Rest"}`);
+			const message = `Step ${index + 1} · ${getStepStateLabel(nextState)}`;
+			if (playbackSchedulerId === null) describeMessage(message);
+			else rebasePlaybackSchedule(message);
 		});
 
 		verticalFaders.append(fragment);
@@ -436,9 +489,17 @@ function renderStep(index: number): void {
 	view.pitchOutput.value = midiNoteToName(quantizedNote);
 	view.noteLabel.textContent = `MIDI ${quantizedNote}`;
 	view.name.textContent = `${location.laneId.toUpperCase()} · Step ${location.laneStepNumber}`;
-	view.toggle.checked = step.enabled;
-	view.toggleText.textContent = step.enabled ? "On" : "Off";
-	view.strip.classList.toggle("is-enabled", step.enabled);
+	const nextState = getNextStepState(step.state);
+	view.toggleText.textContent = getStepStateLabel(step.state);
+	view.toggle.setAttribute(
+		"aria-label",
+		`Step ${index + 1} state: ${getStepStateLabel(step.state)}. Set to ${getStepStateLabel(nextState)}`,
+	);
+	view.toggle.classList.toggle("is-on", step.state === "on");
+	view.toggle.classList.toggle("is-off", step.state === "off");
+	view.toggle.classList.toggle("is-skip", step.state === "skip");
+	view.strip.classList.toggle("is-enabled", step.state === "on");
+	view.strip.classList.toggle("is-skipped", step.state === "skip");
 	view.strip.classList.toggle("is-lane-a", location.laneId === "a");
 	view.strip.classList.toggle("is-lane-b", location.laneId === "b");
 }
@@ -487,7 +548,7 @@ function schedulePlayhead(event: ScheduledStep, channel: number): void {
 
 		showLanePlayhead(event.laneId, event.index);
 		const laneName = event.laneId.toUpperCase();
-		if (event.enabled) {
+		if (event.state === "on") {
 			describeMessage(
 				`CH ${channel + 1} · ${laneName}${event.laneStepNumber} · ${midiNoteToName(event.note)}`,
 			);
@@ -499,7 +560,8 @@ function schedulePlayhead(event: ScheduledStep, channel: number): void {
 	playheadTimerIds.add(timerId);
 }
 
-function getChannelIndex(): number {
+function getLaneChannelIndex(laneId: LaneId): number {
+	const channelSelect = laneId === "a" ? channelASelect : channelBSelect;
 	return Number(channelSelect.value) - 1;
 }
 
@@ -542,12 +604,12 @@ function schedulePlayback(): void {
 	}
 	nextClockTimestamp = clockSchedule.nextTimestamp;
 
-	const channel = getChannelIndex();
 	const lanes = createLaneDefinitions(sequence.length, splitPoint);
 	const quantizedSequence = quantizeSequence(sequence, rootPitchClass, scale);
 	const nextLaneCursors: LaneCursor[] = [];
 
 	lanes.forEach((lane, laneIndex) => {
+		const channel = getLaneChannelIndex(lane.id);
 		const cursor = laneCursors[laneIndex] ?? {
 			nextTimestamp: now,
 			nextIndex: 0,
@@ -564,7 +626,7 @@ function schedulePlayback(): void {
 
 		for (const event of stepSchedule.events) {
 			schedulePlayhead(event, channel);
-			if (!event.enabled) continue;
+			if (event.state !== "on") continue;
 
 			playbackOutput?.send(
 				[0x90 | channel, event.note, noteVelocity],
@@ -695,6 +757,14 @@ function setScale(id: string): void {
 	else rebasePlaybackSchedule(message);
 }
 
+function applyLaneChannelChange(laneId: LaneId): void {
+	const laneName = laneId.toUpperCase();
+	const channel = getLaneChannelIndex(laneId) + 1;
+	const message = `Synth ${laneName} · MIDI channel ${channel}`;
+	if (playbackSchedulerId === null) describeMessage(message);
+	else rebasePlaybackSchedule(message);
+}
+
 function refreshOutputList(): void {
 	const previousSelection = outputSelect.value;
 	const outputs = midiAccess ? Array.from(midiAccess.outputs.values()) : [];
@@ -771,8 +841,11 @@ async function enableMidi(): Promise<void> {
 
 connectButton.addEventListener("click", () => void enableMidi());
 outputSelect.addEventListener("change", () => void selectOutput(outputSelect.value));
-channelSelect.addEventListener("change", () => {
-	rebasePlaybackSchedule(`MIDI channel · ${Number(channelSelect.value)}`);
+channelASelect.addEventListener("change", () => {
+	applyLaneChannelChange("a");
+});
+channelBSelect.addEventListener("change", () => {
+	applyLaneChannelChange("b");
 });
 rootNoteSelect.addEventListener("change", () => {
 	setRootPitchClass(Number(rootNoteSelect.value));

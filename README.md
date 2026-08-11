@@ -30,19 +30,26 @@ counts as secure; double-clicking `index.html` is not supported.
 
 ## Sequencer behavior
 
-- Pitch sliders 1–10: MIDI notes 48–72 (C3–C5), a two-octave range
+- Pitch sliders 1–10: MIDI notes 36–72 (C2–C5), a three-octave range
 - Root note: all 12 chromatic pitch classes
-- Scales: Major, Minor Pentatonic, Natural Minor, and Harmonic Minor
+- Scales: all seven diatonic modes—Ionian, Dorian, Phrygian, Lydian,
+  Mixolydian, Aeolian, and Locrian—plus Minor Pentatonic and Harmonic Minor
 - Quantization: displayed and transmitted notes snap to the nearest selected
   scale tone while each slider retains its underlying chromatic position
-- Step buttons 1–10: independently enable or disable their step
+- Step buttons 1–10: cycle through On, Off, and Skip
+  - On plays the step normally
+  - Off creates a timed rest
+  - Skip removes the step from timing and immediately advances to the next
+    non-skipped step
 - Split control: assigns 0–10 steps to Sequencer A and the remainder to
   Sequencer B
 - Playback: Sequencers A and B run concurrently and loop independently
 - Clock ratio: `1:1`, `1:2`, `1:4`, `2:3`, `5:7`, or `7:11`
 - Timing: the BPM control sets Sequencer A's step clock; Sequencer B's BPM is
   `A BPM × ratio second ÷ ratio first`, with an 80% note gate
-- Notes: velocity 100 on the selected MIDI channel
+- MIDI channels: independent Synth A and Synth B selectors, both defaulting to
+  channel 1
+- Notes: velocity 100, routed through the channel assigned to their sequencer
 - Transport: MIDI Start, Stop, and 24 MIDI Clock pulses per quarter note at
   Sequencer A's BPM
 
