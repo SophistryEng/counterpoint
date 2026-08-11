@@ -1,15 +1,14 @@
-# Sequencer Web MIDI prototype
+# counterpoint
 
-A browser-based 8–32-step MIDI pitch sequencer with vertical pitch sliders,
-step buttons, a two-sequencer split control, tempo control, and Web MIDI output.
-Root-note and scale controls quantize every sequenced pitch.
+counterpoint is a browser-based 8–32-step MIDI pitch sequencer with vertical
+pitch sliders, step buttons, a two-sequencer split control, tempo control, and
+Web MIDI output. Root-note and scale controls quantize every sequenced pitch.
 
 ## Run it
 
 Install the TypeScript 7 and Vite development dependencies:
 
 ```sh
-cd /Users/jdonat/Projects/SophistryEng/Sequencer
 npm install
 npm run dev
 ```
@@ -73,8 +72,8 @@ installed on the computer. It does not create a virtual MIDI port itself.
 1. Open **Audio MIDI Setup** and choose **Window > Show MIDI Studio**.
 2. Double-click **IAC Driver**.
 3. Turn on **Device is online**.
-4. Add or rename a bus to `Sequencer`, then click **Apply**.
-5. Reload this web app, click **Enable MIDI**, and select the `Sequencer` IAC
+4. Add or rename a bus to `counterpoint`, then click **Apply**.
+5. Reload this web app, click **Enable MIDI**, and select the `counterpoint` IAC
    output.
 6. In GarageBand, create and select a Software Instrument track.
 7. Return to the web app and click **Start sequencer**.

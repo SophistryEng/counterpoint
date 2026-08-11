@@ -1,4 +1,4 @@
-# Sequencer Development Guidelines
+# counterpoint Development Guidelines
 
 ## Prefer pure functions
 
