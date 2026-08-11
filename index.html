@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="theme-color" content="#11131a" />
+		<title>Sequencer MIDI Controller</title>
+		<link rel="stylesheet" href="styles.css" />
+		<script type="module" src="/src/main.ts"></script>
+	</head>
+	<body>
+		<main class="controller-shell">
+			<header class="app-header">
+				<div>
+					<p class="eyebrow">Sophistry Engineering</p>
+					<h1>Sequencer</h1>
+				</div>
+
+				<div class="midi-setup" aria-label="MIDI connection settings">
+					<button id="connect-midi" class="connect-button" type="button">
+						Enable MIDI
+					</button>
+
+					<label class="field">
+						<span>Output</span>
+						<select id="midi-output" disabled>
+							<option value="">No MIDI output selected</option>
+						</select>
+					</label>
+
+					<label class="field channel-field">
+						<span>Channel</span>
+						<select id="midi-channel">
+							<option value="1">1</option>
+							<option value="2">2</option>
+							<option value="3">3</option>
+							<option value="4">4</option>
+							<option value="5">5</option>
+							<option value="6">6</option>
+							<option value="7">7</option>
+							<option value="8">8</option>
+							<option value="9">9</option>
+							<option value="10">10</option>
+							<option value="11">11</option>
+							<option value="12">12</option>
+							<option value="13">13</option>
+							<option value="14">14</option>
+							<option value="15">15</option>
+							<option value="16">16</option>
+						</select>
+					</label>
+				</div>
+			</header>
+
+			<section class="status-bar" aria-live="polite">
+				<span id="status-light" class="status-light" aria-hidden="true"></span>
+				<span id="status-text">MIDI has not been enabled.</span>
+				<output id="last-message" class="last-message">Waiting for input</output>
+			</section>
+
+			<section class="fader-bank" aria-label="Ten-step MIDI pitch sequencer">
+				<div id="vertical-faders" class="vertical-faders"></div>
+
+				<div class="lower-controls">
+					<section class="master-section">
+						<div class="master-heading">
+							<div>
+								<p class="control-number">CC 7</p>
+								<h2>Master</h2>
+							</div>
+							<output id="master-value" for="master-fader">64</output>
+						</div>
+						<input
+							id="master-fader"
+							class="horizontal-fader"
+							type="range"
+							min="0"
+							max="127"
+							value="64"
+							data-cc="7"
+							aria-label="Master, MIDI controller 7"
+						/>
+					</section>
+
+					<section class="tempo-section" aria-labelledby="tempo-heading">
+						<div class="tempo-heading">
+							<div>
+								<p class="control-number">Tempo · One step per beat</p>
+								<h2 id="tempo-heading">Sequencer</h2>
+							</div>
+
+							<label class="bpm-field">
+								<input
+									id="bpm-number"
+									type="number"
+									min="30"
+									max="300"
+									step="1"
+									value="120"
+									inputmode="numeric"
+									aria-label="Tempo in beats per minute"
+								/>
+								<span>BPM</span>
+							</label>
+						</div>
+
+						<input
+							id="bpm-slider"
+							class="horizontal-fader tempo-fader"
+							type="range"
+							min="30"
+							max="300"
+							step="1"
+							value="120"
+							aria-label="Tempo"
+						/>
+
+						<button
+							id="transport-toggle"
+							class="transport-button"
+							type="button"
+							disabled
+						>
+							Start sequencer
+						</button>
+					</section>
+				</div>
+			</section>
+
+			<p class="mapping-note">
+				Steps run left to right at one step per beat. Pitch spans C3–C5 (MIDI
+				48–72); disabled steps play as rests. Master sends CC 7.
+			</p>
+		</main>
+
+		<template id="fader-template">
+			<div class="fader">
+				<span class="control-number"></span>
+				<span class="fader-name"></span>
+				<input
+					class="vertical-fader"
+					type="range"
+					min="48"
+					max="72"
+					step="1"
+					value="60"
+				/>
+				<output>C4</output>
+				<label class="step-toggle">
+					<input type="checkbox" />
+					<span>On</span>
+				</label>
+			</div>
+		</template>
+	</body>
+</html>
