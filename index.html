@@ -85,8 +85,8 @@
 					<section class="tempo-section" aria-labelledby="tempo-heading">
 						<div class="tempo-heading">
 							<div>
-								<p class="control-number">Tempo · Shared 10-beat cycle</p>
-								<h2 id="tempo-heading">Sequencers</h2>
+								<p class="control-number">Tempo · Sequencer A</p>
+								<h2 id="tempo-heading">Clocks</h2>
 							</div>
 
 							<label class="bpm-field">
@@ -98,7 +98,7 @@
 									step="1"
 									value="120"
 									inputmode="numeric"
-									aria-label="Tempo in beats per minute"
+									aria-label="Sequencer A tempo in beats per minute"
 								/>
 								<span>BPM</span>
 							</label>
@@ -112,8 +112,23 @@
 							max="300"
 							step="1"
 							value="120"
-							aria-label="Tempo"
+							aria-label="Sequencer A tempo"
 						/>
+
+						<div class="ratio-control">
+							<label class="ratio-field">
+								<span>Clock A:B</span>
+								<select id="clock-ratio">
+									<option value="1:1">1:1</option>
+									<option value="1:2">1:2</option>
+									<option value="1:4">1:4</option>
+									<option value="2:3">2:3</option>
+									<option value="5:7">5:7</option>
+									<option value="7:11">7:11</option>
+								</select>
+							</label>
+							<output id="clock-ratio-summary" aria-live="polite">B 120 BPM</output>
+						</div>
 
 						<button
 							id="transport-toggle"
@@ -128,8 +143,8 @@
 			</section>
 
 			<p class="mapping-note">
-				The split assigns steps to Sequencers A and B. Both divide the same
-				10-beat cycle evenly and restart together. Pitch spans C3–C5 (MIDI
+				The split assigns steps to Sequencers A and B. BPM sets A’s step clock;
+				the A:B ratio derives B’s independent clock. Pitch spans C3–C5 (MIDI
 				48–72); disabled steps play as rests.
 			</p>
 		</main>

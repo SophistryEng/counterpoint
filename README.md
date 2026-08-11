@@ -34,16 +34,22 @@ counts as secure; double-clicking `index.html` is not supported.
 - Step buttons 1–10: independently enable or disable their step
 - Split control: assigns 0–10 steps to Sequencer A and the remainder to
   Sequencer B
-- Playback: Sequencers A and B run concurrently and restart together
-- Timing: both sequencers divide the same ten-beat cycle evenly at 30–300 BPM,
-  with an 80% note gate for each allocated step
+- Playback: Sequencers A and B run concurrently and loop independently
+- Clock ratio: `1:1`, `1:2`, `1:4`, `2:3`, `5:7`, or `7:11`
+- Timing: the BPM control sets Sequencer A's step clock; Sequencer B's BPM is
+  `A BPM × ratio second ÷ ratio first`, with an 80% note gate
 - Notes: velocity 100 on the selected MIDI channel
-- Transport: MIDI Start, Stop, and 24 MIDI Clock pulses per quarter note
+- Transport: MIDI Start, Stop, and 24 MIDI Clock pulses per quarter note at
+  Sequencer A's BPM
 
 For example, a split of `6` gives Sequencer A six steps and Sequencer B four
-steps. A advances every 10/6 beats and B advances every 10/4 beats, so both
-complete their patterns at the end of the same ten-beat cycle. At `0` or `10`,
-one sequencer is empty and the other plays all ten steps.
+steps. With A set to 120 BPM and a `2:3` ratio, A advances at 120 BPM while B
+advances at 180 BPM. Each loops as soon as it reaches the end of its own steps.
+At `0` or `10`, one sequencer is empty and the other plays all ten steps.
+
+MIDI Clock is a global, channel-independent message, so the external MIDI Clock
+output represents Sequencer A's BPM. Sequencer B's derived clock is used by the
+app's internal note scheduler rather than sent as a second MIDI Clock stream.
 
 The page sends to physical MIDI outputs and virtual MIDI outputs already
 installed on the computer. It does not create a virtual MIDI port itself.

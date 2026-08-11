@@ -1,5 +1,11 @@
 type LaneId = "a" | "b";
 
+interface ClockRatio {
+	readonly label: string;
+	readonly first: number;
+	readonly second: number;
+}
+
 interface SequencerStep {
 	readonly note: number;
 	readonly enabled: boolean;
@@ -74,6 +80,8 @@ const splitControl = requireElement<HTMLInputElement>("#split-control");
 const splitValue = requireElement<HTMLOutputElement>("#split-value");
 const bpmNumber = requireElement<HTMLInputElement>("#bpm-number");
 const bpmSlider = requireElement<HTMLInputElement>("#bpm-slider");
+const clockRatioSelect = requireElement<HTMLSelectElement>("#clock-ratio");
+const clockRatioSummary = requireElement<HTMLOutputElement>("#clock-ratio-summary");
 const transportButton = requireElement<HTMLButtonElement>("#transport-toggle");
 
 const minimumMidiNote = 48;
@@ -87,9 +95,23 @@ const schedulerLookaheadMs = 100;
 const schedulerIntervalMs = 25;
 const noteVelocity = 100;
 const noteGateRatio = 0.8;
+const availableClockRatios: readonly ClockRatio[] = [
+	{ label: "1:1", first: 1, second: 1 },
+	{ label: "1:2", first: 1, second: 2 },
+	{ label: "1:4", first: 1, second: 4 },
+	{ label: "2:3", first: 2, second: 3 },
+	{ label: "5:7", first: 5, second: 7 },
+	{ label: "7:11", first: 7, second: 11 },
+];
+const defaultClockRatio = availableClockRatios[0] ?? {
+	label: "1:1",
+	first: 1,
+	second: 1,
+};
 
 let sequence: readonly SequencerStep[] = createInitialSequence(initialPitchPattern);
 let splitPoint = 5;
+let clockRatio = defaultClockRatio;
 let midiAccess: MIDIAccess | null = null;
 let selectedOutput: MIDIOutput | null = null;
 let playbackOutput: MIDIOutput | null = null;
@@ -148,12 +170,32 @@ function getBeatDurationMs(bpmValue: number): number {
 	return 60_000 / bpmValue;
 }
 
-function getCycleDurationMs(bpmValue: number, stepCount: number): number {
-	return getBeatDurationMs(bpmValue) * stepCount;
-}
-
 function getClockIntervalMs(bpmValue: number): number {
 	return getBeatDurationMs(bpmValue) / midiClocksPerQuarterNote;
+}
+
+function getClockRatio(label: string): ClockRatio {
+	return availableClockRatios.find((ratio) => ratio.label === label) ?? defaultClockRatio;
+}
+
+function getSecondSequencerBpm(firstSequencerBpm: number, ratio: ClockRatio): number {
+	return firstSequencerBpm * (ratio.second / ratio.first);
+}
+
+function getLaneStepDurationMs(
+	laneId: LaneId,
+	firstSequencerBpm: number,
+	ratio: ClockRatio,
+): number {
+	const laneBpm =
+		laneId === "a"
+			? firstSequencerBpm
+			: getSecondSequencerBpm(firstSequencerBpm, ratio);
+	return getBeatDurationMs(laneBpm);
+}
+
+function formatBpm(bpmValue: number): string {
+	return Number.isInteger(bpmValue) ? String(bpmValue) : bpmValue.toFixed(1);
 }
 
 function advanceStepIndex(index: number, stepCount: number): number {
@@ -223,7 +265,7 @@ function createLaneSchedule(
 	now: number,
 	cursor: LaneCursor,
 	lane: LaneDefinition,
-	cycleDurationMs: number,
+	stepDurationMs: number,
 	steps: readonly SequencerStep[],
 	lookaheadMs: number,
 	gateRatio: number,
@@ -238,7 +280,6 @@ function createLaneSchedule(
 
 	const events: ScheduledStep[] = [];
 	const scheduleUntil = now + lookaheadMs;
-	const stepDuration = cycleDurationMs / lane.stepCount;
 	let timestamp = Math.max(now, cursor.nextTimestamp);
 	let localIndex = cursor.nextIndex % lane.stepCount;
 
@@ -253,9 +294,9 @@ function createLaneSchedule(
 			laneId: lane.id,
 			laneStepNumber: localIndex + 1,
 			startTimestamp: timestamp,
-			endTimestamp: timestamp + stepDuration * gateRatio,
+			endTimestamp: timestamp + stepDurationMs * gateRatio,
 		});
-		timestamp += stepDuration;
+		timestamp += stepDurationMs;
 		localIndex = advanceStepIndex(localIndex, lane.stepCount);
 	}
 
@@ -342,6 +383,12 @@ function renderSequenceLayout(): void {
 	);
 }
 
+function renderClockSettings(): void {
+	clockRatioSelect.value = clockRatio.label;
+	const secondBpm = getSecondSequencerBpm(bpm, clockRatio);
+	clockRatioSummary.value = `B ${formatBpm(secondBpm)} BPM`;
+}
+
 function showLanePlayhead(laneId: LaneId, stepIndex: number): void {
 	const laneClass = `is-lane-${laneId}`;
 	stepViews.forEach((view, viewIndex) => {
@@ -422,7 +469,6 @@ function schedulePlayback(): void {
 
 	const channel = getChannelIndex();
 	const lanes = createLaneDefinitions(sequence.length, splitPoint);
-	const cycleDuration = getCycleDurationMs(bpm, sequence.length);
 	const nextLaneCursors: LaneCursor[] = [];
 
 	lanes.forEach((lane, laneIndex) => {
@@ -434,7 +480,7 @@ function schedulePlayback(): void {
 			now,
 			cursor,
 			lane,
-			cycleDuration,
+			getLaneStepDurationMs(lane.id, bpm, clockRatio),
 			sequence,
 			schedulerLookaheadMs,
 			noteGateRatio,
@@ -477,7 +523,9 @@ function startPlayback(): void {
 	playbackSchedulerId = window.setInterval(schedulePlayback, schedulerIntervalMs);
 	updateTransportButton(true);
 	schedulePlayback();
-	describeMessage(`MIDI Start · ${bpm} BPM · ${describeSplit(splitPoint, sequence.length)}`);
+	describeMessage(
+		`MIDI Start · A ${bpm} BPM · ${clockRatio.label} · ${describeSplit(splitPoint, sequence.length)}`,
+	);
 }
 
 function stopPlayback(sendStop = true): void {
@@ -528,7 +576,17 @@ function setBpm(value: number): void {
 	bpm = clampBpm(value);
 	bpmNumber.value = String(bpm);
 	bpmSlider.value = String(bpm);
+	renderClockSettings();
 	rebasePlaybackSchedule(`Tempo · ${bpm} BPM`);
+}
+
+function setClockRatio(label: string): void {
+	clockRatio = getClockRatio(label);
+	renderClockSettings();
+	const secondBpm = getSecondSequencerBpm(bpm, clockRatio);
+	const message = `Clock ratio · ${clockRatio.label} · B ${formatBpm(secondBpm)} BPM`;
+	if (playbackSchedulerId === null) describeMessage(message);
+	else rebasePlaybackSchedule(message);
 }
 
 function setSplitPoint(value: number): void {
@@ -622,6 +680,7 @@ channelSelect.addEventListener("change", () => {
 });
 splitControl.addEventListener("input", () => setSplitPoint(Number(splitControl.value)));
 bpmSlider.addEventListener("input", () => setBpm(Number(bpmSlider.value)));
+clockRatioSelect.addEventListener("change", () => setClockRatio(clockRatioSelect.value));
 bpmNumber.addEventListener("change", () => setBpm(Number(bpmNumber.value)));
 bpmNumber.addEventListener("keydown", (event) => {
 	if (event.key === "Enter") setBpm(Number(bpmNumber.value));
@@ -631,4 +690,5 @@ window.addEventListener("beforeunload", () => stopPlayback(true));
 
 buildControls();
 renderSequenceLayout();
+renderClockSettings();
 updateTransportButton(false);
