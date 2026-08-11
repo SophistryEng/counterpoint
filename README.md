@@ -27,6 +27,13 @@ counts as secure; double-clicking `index.html` is not supported.
 - `npm run build` type-checks and creates a production build in `dist/`.
 - `npm run preview` serves the production build locally.
 
+## GitHub Pages
+
+The `Deploy static content to Pages` workflow builds and publishes `dist` when
+changes are pushed to `dev`, or when it is started manually from the Actions
+tab. In the repository’s **Settings → Pages**, set **Source** to
+**GitHub Actions** before the first deployment.
+
 ## Sequencer behavior
 
 - Step count: 8–32 steps, defaulting to 10; the fader row scrolls horizontally
