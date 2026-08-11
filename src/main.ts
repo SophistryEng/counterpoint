@@ -464,9 +464,7 @@ function buildControls(): void {
 			const nextState = getNextStepState(currentStep.state);
 			sequence = updateStepState(sequence, index, nextState);
 			renderStep(index);
-			const message = `Step ${index + 1} · ${getStepStateLabel(nextState)}`;
-			if (playbackSchedulerId === null) describeMessage(message);
-			else rebasePlaybackSchedule(message);
+			describeMessage(`Step ${index + 1} · ${getStepStateLabel(nextState)}`);
 		});
 
 		verticalFaders.append(fragment);
