@@ -1,7 +1,8 @@
 # Sequencer Web MIDI prototype
 
 A browser-based ten-step MIDI pitch sequencer with ten vertical pitch sliders,
-ten step buttons, one master fader, tempo control, and Web MIDI output.
+ten step buttons, a two-sequencer split control, tempo control, and Web MIDI
+output.
 
 ## Run it
 
@@ -31,11 +32,18 @@ counts as secure; double-clicking `index.html` is not supported.
 
 - Pitch sliders 1–10: MIDI notes 48–72 (C3–C5), a two-octave range
 - Step buttons 1–10: independently enable or disable their step
-- Playback: steps 1–10 from left to right, then loops back to step 1
-- Timing: one step per beat at 30–300 BPM, with an 80% note gate
+- Split control: assigns 0–10 steps to Sequencer A and the remainder to
+  Sequencer B
+- Playback: Sequencers A and B run concurrently and restart together
+- Timing: both sequencers divide the same ten-beat cycle evenly at 30–300 BPM,
+  with an 80% note gate for each allocated step
 - Notes: velocity 100 on the selected MIDI channel
-- Master: Control Change 7
 - Transport: MIDI Start, Stop, and 24 MIDI Clock pulses per quarter note
+
+For example, a split of `6` gives Sequencer A six steps and Sequencer B four
+steps. A advances every 10/6 beats and B advances every 10/4 beats, so both
+complete their patterns at the end of the same ten-beat cycle. At `0` or `10`,
+one sequencer is empty and the other plays all ten steps.
 
 The page sends to physical MIDI outputs and virtual MIDI outputs already
 installed on the computer. It does not create a virtual MIDI port itself.
@@ -51,7 +59,7 @@ installed on the computer. It does not create a virtual MIDI port itself.
 6. In GarageBand, create and select a Software Instrument track.
 7. Return to the web app and click **Start sequencer**.
 
-GarageBand will receive the sequenced MIDI notes and master-volume CC from the
-IAC bus. Incoming MIDI Clock support is separate from note reception and depends
-on GarageBand's synchronization features; the sequenced notes do not require
-GarageBand to follow the clock.
+GarageBand will receive the sequenced MIDI notes from the IAC bus. Incoming MIDI
+Clock support is separate from note reception and depends on GarageBand's
+synchronization features; the sequenced notes do not require GarageBand to
+follow the clock.

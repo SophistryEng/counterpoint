@@ -201,7 +201,7 @@ h1 {
 }
 
 .fader output,
-.master-heading output {
+.split-heading output {
 	min-width: 42px;
 	padding: 5px 8px;
 	background: #090b10;
@@ -213,11 +213,30 @@ h1 {
 	text-align: center;
 }
 
-.fader.is-current {
+.split-heading output {
+	min-width: 90px;
+}
+
+.fader.is-lane-a .fader-name {
+	color: #70e0ad;
+}
+
+.fader.is-lane-b .fader-name {
+	color: #72b7ff;
+}
+
+.fader.is-current.is-lane-a {
 	border-color: #54dca1;
 	box-shadow:
 		inset 0 0 0 1px rgb(84 220 161 / 28%),
 		0 0 20px rgb(84 220 161 / 12%);
+}
+
+.fader.is-current.is-lane-b {
+	border-color: #65adf5;
+	box-shadow:
+		inset 0 0 0 1px rgb(101 173 245 / 28%),
+		0 0 20px rgb(101 173 245 / 12%);
 }
 
 .fader:not(.is-enabled) .vertical-fader,
@@ -245,7 +264,7 @@ input[type="range"] {
 	margin-top: 12px;
 }
 
-.master-section,
+.split-section,
 .tempo-section {
 	padding: 17px 20px 19px;
 	background: linear-gradient(180deg, #181b25, #12141c);
@@ -253,7 +272,7 @@ input[type="range"] {
 	border-radius: 14px;
 }
 
-.master-heading,
+.split-heading,
 .tempo-heading {
 	display: flex;
 	align-items: center;
@@ -261,7 +280,7 @@ input[type="range"] {
 	margin-bottom: 9px;
 }
 
-.master-heading h2,
+.split-heading h2,
 .tempo-heading h2 {
 	margin: 0;
 	font-size: 0.9rem;

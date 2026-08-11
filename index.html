@@ -62,31 +62,31 @@
 				<div id="vertical-faders" class="vertical-faders"></div>
 
 				<div class="lower-controls">
-					<section class="master-section">
-						<div class="master-heading">
+					<section class="split-section" aria-labelledby="split-heading">
+						<div class="split-heading">
 							<div>
-								<p class="control-number">CC 7</p>
-								<h2>Master</h2>
+								<p class="control-number">0–10 steps</p>
+								<h2 id="split-heading">Sequence split</h2>
 							</div>
-							<output id="master-value" for="master-fader">64</output>
+							<output id="split-value" for="split-control">A 5 · B 5</output>
 						</div>
 						<input
-							id="master-fader"
+							id="split-control"
 							class="horizontal-fader"
 							type="range"
 							min="0"
-							max="127"
-							value="64"
-							data-cc="7"
-							aria-label="Master, MIDI controller 7"
+							max="10"
+							step="1"
+							value="5"
+							aria-label="Split steps between sequencers"
 						/>
 					</section>
 
 					<section class="tempo-section" aria-labelledby="tempo-heading">
 						<div class="tempo-heading">
 							<div>
-								<p class="control-number">Tempo · One step per beat</p>
-								<h2 id="tempo-heading">Sequencer</h2>
+								<p class="control-number">Tempo · Shared 10-beat cycle</p>
+								<h2 id="tempo-heading">Sequencers</h2>
 							</div>
 
 							<label class="bpm-field">
@@ -121,15 +121,16 @@
 							type="button"
 							disabled
 						>
-							Start sequencer
+							Start sequencers
 						</button>
 					</section>
 				</div>
 			</section>
 
 			<p class="mapping-note">
-				Steps run left to right at one step per beat. Pitch spans C3–C5 (MIDI
-				48–72); disabled steps play as rests. Master sends CC 7.
+				The split assigns steps to Sequencers A and B. Both divide the same
+				10-beat cycle evenly and restart together. Pitch spans C3–C5 (MIDI
+				48–72); disabled steps play as rests.
 			</p>
 		</main>
 

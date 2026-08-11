@@ -1,10 +1,30 @@
+type LaneId = "a" | "b";
+
 interface SequencerStep {
 	readonly note: number;
 	readonly enabled: boolean;
 }
 
+interface LaneDefinition {
+	readonly id: LaneId;
+	readonly startIndex: number;
+	readonly stepCount: number;
+}
+
+interface LaneCursor {
+	readonly nextTimestamp: number;
+	readonly nextIndex: number;
+}
+
+interface StepLocation {
+	readonly laneId: LaneId;
+	readonly laneStepNumber: number;
+}
+
 interface ScheduledStep extends SequencerStep {
 	readonly index: number;
+	readonly laneId: LaneId;
+	readonly laneStepNumber: number;
 	readonly startTimestamp: number;
 	readonly endTimestamp: number;
 }
@@ -24,6 +44,8 @@ interface StepView {
 	readonly strip: HTMLElement;
 	readonly pitchSlider: HTMLInputElement;
 	readonly pitchOutput: HTMLOutputElement;
+	readonly noteLabel: HTMLElement;
+	readonly name: HTMLElement;
 	readonly toggle: HTMLInputElement;
 	readonly toggleText: HTMLSpanElement;
 }
@@ -48,8 +70,8 @@ const statusText = requireElement<HTMLSpanElement>("#status-text");
 const lastMessage = requireElement<HTMLOutputElement>("#last-message");
 const verticalFaders = requireElement<HTMLDivElement>("#vertical-faders");
 const faderTemplate = requireElement<HTMLTemplateElement>("#fader-template");
-const masterFader = requireElement<HTMLInputElement>("#master-fader");
-const masterValue = requireElement<HTMLOutputElement>("#master-value");
+const splitControl = requireElement<HTMLInputElement>("#split-control");
+const splitValue = requireElement<HTMLOutputElement>("#split-value");
 const bpmNumber = requireElement<HTMLInputElement>("#bpm-number");
 const bpmSlider = requireElement<HTMLInputElement>("#bpm-slider");
 const transportButton = requireElement<HTMLButtonElement>("#transport-toggle");
@@ -67,13 +89,13 @@ const noteVelocity = 100;
 const noteGateRatio = 0.8;
 
 let sequence: readonly SequencerStep[] = createInitialSequence(initialPitchPattern);
+let splitPoint = 5;
 let midiAccess: MIDIAccess | null = null;
 let selectedOutput: MIDIOutput | null = null;
 let playbackOutput: MIDIOutput | null = null;
 let playbackSchedulerId: number | null = null;
 let nextClockTimestamp = 0;
-let nextStepTimestamp = 0;
-let nextStepIndex = 0;
+let laneCursors: readonly LaneCursor[] = createLaneCursors(0);
 let bpm = 120;
 
 const stepViews: StepView[] = [];
@@ -118,16 +140,64 @@ function clampBpm(value: number): number {
 	return Math.min(maximumBpm, Math.max(minimumBpm, Math.round(value)));
 }
 
-function getStepDurationMs(bpmValue: number): number {
+function clampSplitPoint(value: number, stepCount: number): number {
+	return Math.min(stepCount, Math.max(0, Math.round(value)));
+}
+
+function getBeatDurationMs(bpmValue: number): number {
 	return 60_000 / bpmValue;
 }
 
+function getCycleDurationMs(bpmValue: number, stepCount: number): number {
+	return getBeatDurationMs(bpmValue) * stepCount;
+}
+
 function getClockIntervalMs(bpmValue: number): number {
-	return getStepDurationMs(bpmValue) / midiClocksPerQuarterNote;
+	return getBeatDurationMs(bpmValue) / midiClocksPerQuarterNote;
 }
 
 function advanceStepIndex(index: number, stepCount: number): number {
 	return (index + 1) % stepCount;
+}
+
+function createLaneDefinitions(
+	stepCount: number,
+	requestedSplitPoint: number,
+): readonly LaneDefinition[] {
+	const safeSplitPoint = clampSplitPoint(requestedSplitPoint, stepCount);
+	return [
+		{ id: "a", startIndex: 0, stepCount: safeSplitPoint },
+		{ id: "b", startIndex: safeSplitPoint, stepCount: stepCount - safeSplitPoint },
+	];
+}
+
+function createLaneCursors(startTimestamp: number): readonly LaneCursor[] {
+	return [
+		{ nextTimestamp: startTimestamp, nextIndex: 0 },
+		{ nextTimestamp: startTimestamp, nextIndex: 0 },
+	];
+}
+
+function getStepLocation(
+	stepIndex: number,
+	lanes: readonly LaneDefinition[],
+): StepLocation | null {
+	const lane = lanes.find(
+		(candidate) =>
+			stepIndex >= candidate.startIndex &&
+			stepIndex < candidate.startIndex + candidate.stepCount,
+	);
+	if (!lane) return null;
+
+	return {
+		laneId: lane.id,
+		laneStepNumber: stepIndex - lane.startIndex + 1,
+	};
+}
+
+function describeSplit(requestedSplitPoint: number, stepCount: number): string {
+	const safeSplitPoint = clampSplitPoint(requestedSplitPoint, stepCount);
+	return `A ${safeSplitPoint} · B ${stepCount - safeSplitPoint}`;
 }
 
 function createClockSchedule(
@@ -149,36 +219,47 @@ function createClockSchedule(
 	return { timestamps, nextTimestamp: timestamp };
 }
 
-function createStepSchedule(
+function createLaneSchedule(
 	now: number,
-	nextTimestamp: number,
-	startingIndex: number,
-	bpmValue: number,
+	cursor: LaneCursor,
+	lane: LaneDefinition,
+	cycleDurationMs: number,
 	steps: readonly SequencerStep[],
 	lookaheadMs: number,
 	gateRatio: number,
 ): StepSchedule {
+	if (lane.stepCount === 0) {
+		return {
+			events: [],
+			nextTimestamp: cursor.nextTimestamp,
+			nextIndex: 0,
+		};
+	}
+
 	const events: ScheduledStep[] = [];
 	const scheduleUntil = now + lookaheadMs;
-	const stepDuration = getStepDurationMs(bpmValue);
-	let timestamp = Math.max(now, nextTimestamp);
-	let index = startingIndex;
+	const stepDuration = cycleDurationMs / lane.stepCount;
+	let timestamp = Math.max(now, cursor.nextTimestamp);
+	let localIndex = cursor.nextIndex % lane.stepCount;
 
 	while (timestamp < scheduleUntil) {
-		const step = steps[index];
+		const globalIndex = lane.startIndex + localIndex;
+		const step = steps[globalIndex];
 		if (!step) break;
 
 		events.push({
 			...step,
-			index,
+			index: globalIndex,
+			laneId: lane.id,
+			laneStepNumber: localIndex + 1,
 			startTimestamp: timestamp,
 			endTimestamp: timestamp + stepDuration * gateRatio,
 		});
 		timestamp += stepDuration;
-		index = advanceStepIndex(index, steps.length);
+		localIndex = advanceStepIndex(localIndex, lane.stepCount);
 	}
 
-	return { events, nextTimestamp: timestamp, nextIndex: index };
+	return { events, nextTimestamp: timestamp, nextIndex: localIndex };
 }
 
 function buildControls(): void {
@@ -187,8 +268,8 @@ function buildControls(): void {
 		const strip = requireChild<HTMLElement>(fragment, ".fader");
 		const pitchSlider = requireChild<HTMLInputElement>(fragment, ".vertical-fader");
 		const pitchOutput = requireChild<HTMLOutputElement>(fragment, "output");
-		const noteLabel = requireChild<HTMLParagraphElement>(fragment, ".control-number");
-		const name = requireChild<HTMLSpanElement>(fragment, ".fader-name");
+		const noteLabel = requireChild<HTMLElement>(fragment, ".control-number");
+		const name = requireChild<HTMLElement>(fragment, ".fader-name");
 		const toggle = requireChild<HTMLInputElement>(fragment, ".step-toggle input");
 		const toggleText = requireChild<HTMLSpanElement>(fragment, ".step-toggle span");
 
@@ -196,11 +277,17 @@ function buildControls(): void {
 		pitchSlider.value = String(step.note);
 		pitchSlider.setAttribute("aria-label", `Step ${index + 1} pitch`);
 		pitchOutput.htmlFor = pitchSlider.id;
-		noteLabel.textContent = `MIDI ${step.note}`;
-		name.textContent = `Step ${index + 1}`;
 		toggle.setAttribute("aria-label", `Enable step ${index + 1}`);
 
-		const view = { strip, pitchSlider, pitchOutput, toggle, toggleText };
+		const view = {
+			strip,
+			pitchSlider,
+			pitchOutput,
+			noteLabel,
+			name,
+			toggle,
+			toggleText,
+		};
 		stepViews.push(view);
 
 		pitchSlider.addEventListener("input", () => {
@@ -230,19 +317,37 @@ function renderStep(index: number): void {
 	const view = stepViews[index];
 	if (!step || !view) return;
 
+	const lanes = createLaneDefinitions(sequence.length, splitPoint);
+	const location = getStepLocation(index, lanes);
+	if (!location) return;
+
 	view.pitchSlider.value = String(step.note);
 	view.pitchOutput.value = midiNoteToName(step.note);
+	view.noteLabel.textContent = `MIDI ${step.note}`;
+	view.name.textContent = `${location.laneId.toUpperCase()} · Step ${location.laneStepNumber}`;
 	view.toggle.checked = step.enabled;
 	view.toggleText.textContent = step.enabled ? "On" : "Off";
 	view.strip.classList.toggle("is-enabled", step.enabled);
-
-	const noteLabel = view.strip.querySelector<HTMLElement>(".control-number");
-	if (noteLabel) noteLabel.textContent = `MIDI ${step.note}`;
+	view.strip.classList.toggle("is-lane-a", location.laneId === "a");
+	view.strip.classList.toggle("is-lane-b", location.laneId === "b");
 }
 
-function showPlayhead(index: number): void {
+function renderSequenceLayout(): void {
+	sequence.forEach((_step, index) => renderStep(index));
+	splitControl.value = String(splitPoint);
+	splitValue.value = describeSplit(splitPoint, sequence.length);
+	splitControl.setAttribute(
+		"aria-valuetext",
+		`Sequencer A has ${splitPoint} steps; Sequencer B has ${sequence.length - splitPoint} steps`,
+	);
+}
+
+function showLanePlayhead(laneId: LaneId, stepIndex: number): void {
+	const laneClass = `is-lane-${laneId}`;
 	stepViews.forEach((view, viewIndex) => {
-		view.strip.classList.toggle("is-current", viewIndex === index);
+		if (view.strip.classList.contains(laneClass)) {
+			view.strip.classList.toggle("is-current", viewIndex === stepIndex);
+		}
 	});
 }
 
@@ -258,13 +363,14 @@ function schedulePlayhead(event: ScheduledStep, channel: number): void {
 		playheadTimerIds.delete(timerId);
 		if (playbackSchedulerId === null) return;
 
-		showPlayhead(event.index);
+		showLanePlayhead(event.laneId, event.index);
+		const laneName = event.laneId.toUpperCase();
 		if (event.enabled) {
 			describeMessage(
-				`CH ${channel + 1} · Step ${event.index + 1} · ${midiNoteToName(event.note)}`,
+				`CH ${channel + 1} · ${laneName}${event.laneStepNumber} · ${midiNoteToName(event.note)}`,
 			);
 		} else {
-			describeMessage(`Step ${event.index + 1} · Rest`);
+			describeMessage(`${laneName}${event.laneStepNumber} · Rest`);
 		}
 	}, delay);
 
@@ -314,29 +420,48 @@ function schedulePlayback(): void {
 	}
 	nextClockTimestamp = clockSchedule.nextTimestamp;
 
-	const stepSchedule = createStepSchedule(
-		now,
-		nextStepTimestamp,
-		nextStepIndex,
-		bpm,
-		sequence,
-		schedulerLookaheadMs,
-		noteGateRatio,
-	);
 	const channel = getChannelIndex();
-	for (const event of stepSchedule.events) {
-		schedulePlayhead(event, channel);
-		if (!event.enabled) continue;
+	const lanes = createLaneDefinitions(sequence.length, splitPoint);
+	const cycleDuration = getCycleDurationMs(bpm, sequence.length);
+	const nextLaneCursors: LaneCursor[] = [];
 
-		playbackOutput.send([0x90 | channel, event.note, noteVelocity], event.startTimestamp);
-		playbackOutput.send([0x80 | channel, event.note, 0], event.endTimestamp);
-	}
-	nextStepTimestamp = stepSchedule.nextTimestamp;
-	nextStepIndex = stepSchedule.nextIndex;
+	lanes.forEach((lane, laneIndex) => {
+		const cursor = laneCursors[laneIndex] ?? {
+			nextTimestamp: now,
+			nextIndex: 0,
+		};
+		const stepSchedule = createLaneSchedule(
+			now,
+			cursor,
+			lane,
+			cycleDuration,
+			sequence,
+			schedulerLookaheadMs,
+			noteGateRatio,
+		);
+
+		for (const event of stepSchedule.events) {
+			schedulePlayhead(event, channel);
+			if (!event.enabled) continue;
+
+			playbackOutput?.send(
+				[0x90 | channel, event.note, noteVelocity],
+				event.startTimestamp,
+			);
+			playbackOutput?.send([0x80 | channel, event.note, 0], event.endTimestamp);
+		}
+
+		nextLaneCursors.push({
+			nextTimestamp: stepSchedule.nextTimestamp,
+			nextIndex: stepSchedule.nextIndex,
+		});
+	});
+
+	laneCursors = nextLaneCursors;
 }
 
 function updateTransportButton(isRunning: boolean): void {
-	transportButton.textContent = isRunning ? "Stop sequencer" : "Start sequencer";
+	transportButton.textContent = isRunning ? "Stop sequencers" : "Start sequencers";
 	transportButton.classList.toggle("is-running", isRunning);
 	transportButton.setAttribute("aria-pressed", String(isRunning));
 }
@@ -347,13 +472,12 @@ function startPlayback(): void {
 	playbackOutput = selectedOutput;
 	const now = performance.now();
 	nextClockTimestamp = now;
-	nextStepTimestamp = now;
-	nextStepIndex = 0;
+	laneCursors = createLaneCursors(now);
 	playbackOutput.send([0xfa]);
 	playbackSchedulerId = window.setInterval(schedulePlayback, schedulerIntervalMs);
 	updateTransportButton(true);
 	schedulePlayback();
-	describeMessage(`MIDI Start · ${bpm} BPM`);
+	describeMessage(`MIDI Start · ${bpm} BPM · ${describeSplit(splitPoint, sequence.length)}`);
 }
 
 function stopPlayback(sendStop = true): void {
@@ -393,7 +517,7 @@ function rebasePlaybackSchedule(message: string): void {
 	clearPlayhead();
 	const now = performance.now();
 	nextClockTimestamp = now;
-	nextStepTimestamp = now;
+	laneCursors = createLaneCursors(now);
 	schedulePlayback();
 	describeMessage(message);
 }
@@ -407,15 +531,14 @@ function setBpm(value: number): void {
 	rebasePlaybackSchedule(`Tempo · ${bpm} BPM`);
 }
 
-function sendControlChange(controller: number, value: number): void {
-	if (!selectedOutput) {
-		describeMessage(`CC ${controller} = ${value} (no output)`);
-		return;
-	}
+function setSplitPoint(value: number): void {
+	if (!Number.isFinite(value)) return;
 
-	const channel = getChannelIndex();
-	selectedOutput.send([0xb0 | channel, controller, value]);
-	describeMessage(`CH ${channel + 1} · CC ${controller} · ${value}`);
+	splitPoint = clampSplitPoint(value, sequence.length);
+	renderSequenceLayout();
+	const message = `Sequence split · ${describeSplit(splitPoint, sequence.length)}`;
+	if (playbackSchedulerId === null) describeMessage(message);
+	else rebasePlaybackSchedule(message);
 }
 
 function refreshOutputList(): void {
@@ -497,10 +620,7 @@ outputSelect.addEventListener("change", () => void selectOutput(outputSelect.val
 channelSelect.addEventListener("change", () => {
 	rebasePlaybackSchedule(`MIDI channel · ${Number(channelSelect.value)}`);
 });
-masterFader.addEventListener("input", () => {
-	masterValue.value = masterFader.value;
-	sendControlChange(7, Number(masterFader.value));
-});
+splitControl.addEventListener("input", () => setSplitPoint(Number(splitControl.value)));
 bpmSlider.addEventListener("input", () => setBpm(Number(bpmSlider.value)));
 bpmNumber.addEventListener("change", () => setBpm(Number(bpmNumber.value)));
 bpmNumber.addEventListener("keydown", (event) => {
@@ -510,4 +630,5 @@ transportButton.addEventListener("click", togglePlayback);
 window.addEventListener("beforeunload", () => stopPlayback(true));
 
 buildControls();
+renderSequenceLayout();
 updateTransportButton(false);
